@@ -3,10 +3,13 @@
 /* Controllers */
 
 
-function MyCtrl1() {}
-MyCtrl1.$inject = [];
+function HomeCtrl($scope) {
+    $scope.token = Math.random().toString(36).substring(7);
 
-
-function MyCtrl2() {
 }
-MyCtrl2.$inject = [];
+//HomeCtrl.$inject = [];
+
+
+function SessionCtrl() {
+}
+SessionCtrl.$inject = [];
