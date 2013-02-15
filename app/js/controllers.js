@@ -11,12 +11,13 @@ function HomeCtrl($scope) {
 
 
 function SessionCtrl($scope, $routeParams) {
-    $scope.participants = 0;                                  
+    $scope.participants = 1;
     $scope.ws_open = 0;
     $scope.token = $routeParams.token;
     $scope.session_type = $routeParams.sessType;
+    $scope.localStream = null;
  
-    var describeMediaStreams(session_type) {
+    var describeMediaStreams = function (session_type) {
         if (session_type === "voice") {
             return {video: false, audio: true}
         } else if(mediaType === "video") {
@@ -27,7 +28,7 @@ function SessionCtrl($scope, $routeParams) {
         }
     };
 
-    var describeMediaConstraints(session_type) {
+    var describeMediaConstraints = function (session_type) {
         if (session_type === "voice") {
             return {
                 'mandatory': {
@@ -65,8 +66,69 @@ function SessionCtrl($scope, $routeParams) {
         }
     };
 
+    var sinsSubscribe = function (type, name) {
+        return wsSend("SUBSCRIBE", "/"+type+"/"+name);
+    };
+
+    var sinsSubscribeTopic = function (name) {
+        return sinsSubscribe("topic", name);
+    };
+
+    var sinsSubscribePair = function (name) {
+        return sinsSubscribe("pair", name);
+    };
+
     var wsOnMessage = function(msg) {
+        var message = JSON.parse(msg.data);
+        switch (message.action) {
+            case "userCount":
+                wsSend(
+                    "SEND",
+                    message.destination,
+                    {
+                        action: "retUserCount",
+                        participants: $scope.participants
+                    }
+                );
+                break;
+
+            case "retUserCount":
+                if ( message.participants > $scope.participants) {
+                   $scope.participants = message.participants;
+                }
+                break;
+        }
         
+    };
+
+    var failedGUM = function () {
+        console.log("Failed GetUserMedia.");
+        //TODO: Do Disconnection
+     };
+
+    var gotUserMedia = function(lStream) {
+
+        $scope.localStream = lStream;
+        attachMediaStream($scope.divLocalStream, $scope.localStream);
+
+        for (var i = 1; i < $scope.participants; i++) {
+            var pair_name = $scope.token;
+            if ( i < $scope.me ) {
+                pair_name += "."+i+"-"+$scope.me;
+            } else if ( i > $scope.me) {
+                pair_name += "."+$scope.me+"-"+i;
+            } else if ( i === $scope.me ) {
+                //Do nothing
+                return;
+            }
+            sinsSubscribePair(pair_name);
+        }
+    };
+
+    var startConnection = function () {
+        $scope.participants += 1;
+        $scope.me = $scope.participants;
+        getUserMedia(describeMediaStreams($scope.session_type), gotUserMedia, failedGUM);
     };
 
     var wsOnOpen = function(msg) {
@@ -74,8 +136,9 @@ function SessionCtrl($scope, $routeParams) {
          * 
          */
         $scope.ws_open = 1;
-        wsSend("SUBSCRIBE", "/topic/"+$scope.token);
+        sinsSubscribeTopic($scope.token);
         wsSend("SEND", "/topic/"+$scope.token, {action: "userCount"});
+        setTimeout(startConnection, 5000);
 
     };
 
